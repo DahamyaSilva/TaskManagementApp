@@ -1,12 +1,15 @@
-// App.jsx
 import React, { useState, useEffect } from 'react';
+import { 
+  fetchTasks, 
+  createTask, 
+  updateTask, 
+  deleteTask, 
+  toggleTaskCompletion 
+} from './api/tasksApi';
 import './App.css';
 
 const App = () => {
-  const [tasks, setTasks] = useState(() => {
-    const savedTasks = localStorage.getItem('tasks');
-    return savedTasks ? JSON.parse(savedTasks) : [];
-  });
+  const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -16,56 +19,111 @@ const App = () => {
   });
   const [editingId, setEditingId] = useState(null);
   const [isFormVisible, setIsFormVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
+  // Fetch all tasks on component mount
   useEffect(() => {
-    localStorage.setItem('tasks', JSON.stringify(tasks));
-  }, [tasks]);
+    const loadTasks = async () => {
+      try {
+        setIsLoading(true);
+        const data = await fetchTasks();
+        setTasks(data);
+        setError(null);
+      } catch (err) {
+        setError('Failed to load tasks. Please try again later.');
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTasks();
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setNewTask((prev) => ({ ...prev, [name]: value }));
   };
 
-  const addTask = (e) => {
+  const addTask = async (e) => {
     e.preventDefault();
     if (!newTask.title.trim()) return;
 
-    if (editingId !== null) {
-      // Update existing task
-      setTasks(tasks.map((task) => (task.id === editingId ? { ...newTask, id: editingId } : task)));
-      setEditingId(null);
-    } else {
-      // Add new task
-      setTasks([...tasks, { ...newTask, id: Date.now() }]);
+    try {
+      setIsLoading(true);
+      
+      if (editingId !== null) {
+        // Update existing task
+        const updatedTask = await updateTask(editingId, newTask);
+        setTasks(tasks.map((task) => (task._id === editingId ? updatedTask : task)));
+        setEditingId(null);
+      } else {
+        // Add new task
+        const createdTask = await createTask(newTask);
+        setTasks([createdTask, ...tasks]);
+      }
+
+      // Reset form
+      setNewTask({
+        title: '',
+        description: '',
+        dueDate: '',
+        priority: 'Medium',
+        completed: false,
+      });
+      setIsFormVisible(false);
+      setError(null);
+    } catch (err) {
+      setError('Failed to save task. Please try again.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    // Reset form
+  const handleDeleteTask = async (id) => {
+    try {
+      setIsLoading(true);
+      await deleteTask(id);
+      setTasks(tasks.filter((task) => task._id !== id));
+      setError(null);
+    } catch (err) {
+      setError('Failed to delete task. Please try again.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditTask = (task) => {
     setNewTask({
-      title: '',
-      description: '',
-      dueDate: '',
-      priority: 'Medium',
-      completed: false,
+      title: task.title,
+      description: task.description || '',
+      dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+      priority: task.priority,
+      completed: task.completed,
     });
-    setIsFormVisible(false);
-  };
-
-  const deleteTask = (id) => {
-    setTasks(tasks.filter((task) => task.id !== id));
-  };
-
-  const editTask = (task) => {
-    setNewTask({ ...task });
-    setEditingId(task.id);
+    setEditingId(task._id);
     setIsFormVisible(true);
   };
 
-  const toggleComplete = (id) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    );
+  const handleToggleComplete = async (id) => {
+    try {
+      setIsLoading(true);
+      const updatedTask = await toggleTaskCompletion(id);
+      setTasks(
+        tasks.map((task) =>
+          task._id === id ? updatedTask : task
+        )
+      );
+      setError(null);
+    } catch (err) {
+      setError('Failed to update task status. Please try again.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const cancelEdit = () => {
@@ -101,10 +159,13 @@ const App = () => {
           className="add-button" 
           onClick={() => setIsFormVisible(true)}
           style={{ display: isFormVisible ? 'none' : 'block' }}
+          disabled={isLoading}
         >
           + New Task
         </button>
       </header>
+
+      {error && <div className="error-message">{error}</div>}
 
       {isFormVisible && (
         <div className="task-form-container">
@@ -121,6 +182,7 @@ const App = () => {
                 onChange={handleInputChange}
                 placeholder="Task title"
                 required
+                disabled={isLoading}
               />
             </div>
 
@@ -133,6 +195,7 @@ const App = () => {
                 onChange={handleInputChange}
                 placeholder="Task description"
                 rows="3"
+                disabled={isLoading}
               />
             </div>
 
@@ -145,6 +208,7 @@ const App = () => {
                   name="dueDate"
                   value={newTask.dueDate}
                   onChange={handleInputChange}
+                  disabled={isLoading}
                 />
               </div>
 
@@ -155,6 +219,7 @@ const App = () => {
                   name="priority"
                   value={newTask.priority}
                   onChange={handleInputChange}
+                  disabled={isLoading}
                 >
                   <option value="High">High</option>
                   <option value="Medium">Medium</option>
@@ -164,11 +229,20 @@ const App = () => {
             </div>
 
             <div className="form-actions">
-              <button type="button" className="cancel-button" onClick={cancelEdit}>
+              <button 
+                type="button" 
+                className="cancel-button" 
+                onClick={cancelEdit}
+                disabled={isLoading}
+              >
                 Cancel
               </button>
-              <button type="submit" className="submit-button">
-                {editingId !== null ? 'Update Task' : 'Add Task'}
+              <button 
+                type="submit" 
+                className="submit-button"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Saving...' : (editingId !== null ? 'Update Task' : 'Add Task')}
               </button>
             </div>
           </form>
@@ -177,13 +251,15 @@ const App = () => {
 
       <div className="task-list-container">
         <h2>My Tasks</h2>
-        {tasks.length === 0 ? (
+        {isLoading && tasks.length === 0 ? (
+          <p className="loading-message">Loading tasks...</p>
+        ) : tasks.length === 0 ? (
           <p className="no-tasks">No tasks yet. Add a task to get started!</p>
         ) : (
           <div className="task-list">
             {tasks.map((task) => (
               <div 
-                key={task.id} 
+                key={task._id} 
                 className={`task-card ${task.completed ? 'completed' : ''}`}
               >
                 <div className="task-header">
@@ -191,11 +267,12 @@ const App = () => {
                     <input
                       type="checkbox"
                       checked={task.completed}
-                      onChange={() => toggleComplete(task.id)}
-                      id={`task-${task.id}`}
+                      onChange={() => handleToggleComplete(task._id)}
+                      id={`task-${task._id}`}
+                      disabled={isLoading}
                     />
                     <label 
-                      htmlFor={`task-${task.id}`}
+                      htmlFor={`task-${task._id}`}
                       className={task.completed ? 'completed' : ''}
                     >
                       {task.title}
@@ -219,14 +296,15 @@ const App = () => {
                 <div className="task-actions">
                   <button 
                     className="edit-button" 
-                    onClick={() => editTask(task)}
-                    disabled={isFormVisible}
+                    onClick={() => handleEditTask(task)}
+                    disabled={isLoading || isFormVisible}
                   >
                     Edit
                   </button>
                   <button 
                     className="delete-button" 
-                    onClick={() => deleteTask(task.id)}
+                    onClick={() => handleDeleteTask(task._id)}
+                    disabled={isLoading}
                   >
                     Delete
                   </button>
