@@ -1,11 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  fetchTasks, 
-  createTask, 
-  updateTask, 
-  deleteTask, 
-  toggleTaskCompletion 
-} from './api/tasksApi';
 import './App.css';
 
 const App = () => {
@@ -21,6 +14,55 @@ const App = () => {
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Mock function to fetch tasks - replace with actual API call
+  const fetchTasks = async () => {
+    // This would be an API call in a real application
+    return [];
+  };
+
+  // Mock function to create a task - replace with actual API call
+  const createTask = async (task) => {
+    // This would be an API call in a real application
+    return {
+      _id: Date.now().toString(),
+      ...task,
+      createdAt: new Date()
+    };
+  };
+
+  // Mock function to update a task - replace with actual API call
+  const updateTask = async (id, task) => {
+    // This would be an API call in a real application
+    return {
+      _id: id,
+      ...task,
+      updatedAt: new Date()
+    };
+  };
+
+  // Mock function to delete a task - replace with actual API call
+  const deleteTask = async (id) => {
+    // This would be an API call in a real application
+    return true;
+  };
+
+  // Mock function to toggle task completion - replace with actual API call
+  const toggleTaskCompletion = async (id) => {
+    // Find the task in the current state
+    const task = tasks.find(task => task._id === id);
+    if (!task) return null;
+    
+    // Toggle completion status
+    const updatedTask = {
+      ...task,
+      completed: !task.completed,
+      updatedAt: new Date()
+    };
+    
+    // This would be an API call in a real application
+    return updatedTask;
+  };
 
   // Fetch all tasks on component mount
   useEffect(() => {
